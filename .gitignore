@@ -1,5 +1,6 @@
 # compiled output
 /dist
+/src/generated/prisma
 /node_modules
 /build
 
