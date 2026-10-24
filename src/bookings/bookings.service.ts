@@ -191,7 +191,7 @@ export class BookingsService {
       slot_id: booking.slotId,
       name: booking.name,
       email: booking.email,
-      status: booking.status,
+      status: booking.status.toLowerCase(),
       created_at: booking.createdAt,
     };
   }
