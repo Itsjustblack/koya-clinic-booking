@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { nanoid } from 'nanoid';
 import type { Booking } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { ERROR_MESSAGES } from '../common/errors/error-messages.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 
 @Injectable()
@@ -15,7 +16,7 @@ export class BookingsService {
 
     if (!slot) {
       throw new HttpException(
-        { error: 'slot not found' },
+        { error: ERROR_MESSAGES.SLOT_NOT_FOUND },
         HttpStatus.NOT_FOUND,
       );
     }
@@ -39,7 +40,7 @@ export class BookingsService {
 
     if (!booking) {
       throw new HttpException(
-        { error: 'booking not found' },
+        { error: ERROR_MESSAGES.BOOKING_NOT_FOUND },
         HttpStatus.NOT_FOUND,
       );
     }

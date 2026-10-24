@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { ERROR_MESSAGES } from '../errors/error-messages.js';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -46,8 +47,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private getMessage(exception: unknown, status: number): string {
     if (!(exception instanceof HttpException)) {
       return status === HttpStatus.INTERNAL_SERVER_ERROR
-        ? 'internal server error'
-        : 'request failed';
+        ? ERROR_MESSAGES.INTERNAL_SERVER_ERROR
+        : ERROR_MESSAGES.REQUEST_FAILED;
     }
 
     const exceptionResponse = exception.getResponse();
@@ -67,7 +68,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
 
       if (Array.isArray(responseBody.message)) {
-        return String(responseBody.message[0] ?? 'invalid request');
+        return String(
+          responseBody.message[0] ?? ERROR_MESSAGES.INVALID_REQUEST,
+        );
       }
 
       if (typeof responseBody.message === 'string') {
@@ -76,7 +79,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     return status === HttpStatus.INTERNAL_SERVER_ERROR
-      ? 'internal server error'
-      : 'request failed';
+      ? ERROR_MESSAGES.INTERNAL_SERVER_ERROR
+      : ERROR_MESSAGES.REQUEST_FAILED;
   }
 }
