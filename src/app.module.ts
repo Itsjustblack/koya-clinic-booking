@@ -4,6 +4,8 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './database/prisma.module.js';
+import { BookingsModule } from './bookings/bookings.module.js';
+import { SlotsModule } from './slots/slots.module.js';
 import { LoggingMiddleware } from './common/middleware/logging.middleware.js';
 
 @Module({
@@ -18,6 +20,8 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware.js';
       validate: validateEnv,
     }),
     PrismaModule,
+    SlotsModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
