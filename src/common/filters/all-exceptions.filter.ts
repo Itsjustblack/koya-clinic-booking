@@ -63,10 +63,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message?: unknown;
       };
 
-      if (typeof responseBody.error === 'string') {
-        return responseBody.error;
-      }
-
       if (Array.isArray(responseBody.message)) {
         return String(
           responseBody.message[0] ?? ERROR_MESSAGES.INVALID_REQUEST,
@@ -75,6 +71,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       if (typeof responseBody.message === 'string') {
         return responseBody.message;
+      }
+
+      if (typeof responseBody.error === 'string') {
+        return responseBody.error;
       }
     }
 
