@@ -14,7 +14,7 @@ export type RateLimitResult = {
 export class RateLimitService {
   private readonly windows = new Map<string, AttemptWindow>();
   private readonly windowMilliseconds = 60_000;
-  private readonly limit = 1;
+  private readonly limit = 5;
 
   check(email: string, now = Date.now()): RateLimitResult {
     this.removeExpiredWindows(now);
