@@ -5,6 +5,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { BookingStatus } from '../generated/prisma/enums.js';
 import { ERROR_MESSAGES } from '../common/errors/error-messages.js';
+import { decodeCursor, encodeCursor } from './cursor.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { ListBookingsDto } from './dto/list-bookings.dto.js';
 
@@ -132,22 +133,41 @@ export class BookingsService {
   }
 
   async findAll(query: ListBookingsDto) {
+    let cursorFilter: Prisma.BookingWhereInput | undefined;
+
+    if (query.cursor) {
+      try {
+        const cursor = decodeCursor(query.cursor);
+        cursorFilter = {
+          OR: [
+            { createdAt: { gt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+          ],
+        };
+      } catch {
+        throw new HttpException(
+          { error: ERROR_MESSAGES.INVALID_REQUEST },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
     const bookings = await this.prisma.booking.findMany({
-      where: { email: query.email },
-      orderBy: { createdAt: 'asc' },
-      skip: (query.page - 1) * query.limit,
+      where: { email: query.email, ...cursorFilter },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: query.limit + 1,
     });
 
     const hasMore = bookings.length > query.limit;
     const page = hasMore ? bookings.slice(0, query.limit) : bookings;
+    const lastBooking = page.at(-1);
 
     return {
       bookings: page.map((booking) => this.toResponseDto(booking)),
-      page: query.page,
-      limit: query.limit,
-      has_next_page: hasMore,
-      has_previous_page: query.page > 1,
+      next_cursor:
+        hasMore && lastBooking
+          ? encodeCursor({ createdAt: lastBooking.createdAt, id: lastBooking.id })
+          : null,
     };
   }
 

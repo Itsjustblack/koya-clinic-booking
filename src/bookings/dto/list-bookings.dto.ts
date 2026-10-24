@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsEmail, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListBookingsDto {
   @IsEmail()
@@ -16,8 +16,6 @@ export class ListBookingsDto {
   limit = 10;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page = 1;
+  @IsString()
+  cursor?: string;
 }
