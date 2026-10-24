@@ -26,6 +26,7 @@ export class SlotsController {
   @HttpCode(HttpStatus.OK)
   async reset(@Body() body: ResetSlotsDto) {
     await this.slotsService.reset(body.slots);
+    return { message: 'slots reset' };
   }
 
   @Get('slots')
