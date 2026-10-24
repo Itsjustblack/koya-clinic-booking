@@ -1,7 +1,9 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { nanoid } from 'nanoid';
 import type { Booking } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { BookingStatus } from '../generated/prisma/enums.js';
 import { ERROR_MESSAGES } from '../common/errors/error-messages.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 
@@ -28,14 +30,45 @@ export class BookingsService {
       );
     }
 
-    const booking = await this.prisma.booking.create({
-      data: {
-        id: nanoid(12),
+    const existingBooking = await this.prisma.booking.findFirst({
+      where: {
         slotId: input.slot_id,
-        name: input.name,
-        email: input.email,
+        status: BookingStatus.CONFIRMED,
       },
+      select: { id: true },
     });
+
+    if (existingBooking) {
+      throw new HttpException(
+        { error: ERROR_MESSAGES.SLOT_ALREADY_BOOKED },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    let booking: Booking;
+
+    try {
+      booking = await this.prisma.booking.create({
+        data: {
+          id: nanoid(12),
+          slotId: input.slot_id,
+          name: input.name,
+          email: input.email,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new HttpException(
+          { error: ERROR_MESSAGES.SLOT_ALREADY_BOOKED },
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      throw error;
+    }
 
     return this.toResponseDto(booking);
   }
@@ -51,6 +84,40 @@ export class BookingsService {
         HttpStatus.NOT_FOUND,
       );
     }
+
+    return this.toResponseDto(booking);
+  }
+
+  async cancel(id: string) {
+    const result = await this.prisma.booking.updateMany({
+      where: {
+        id,
+        status: BookingStatus.CONFIRMED,
+      },
+      data: { status: BookingStatus.CANCELLED },
+    });
+
+    if (result.count === 0) {
+      const booking = await this.prisma.booking.findUnique({
+        where: { id },
+      });
+
+      if (!booking) {
+        throw new HttpException(
+          { error: ERROR_MESSAGES.BOOKING_NOT_FOUND },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      throw new HttpException(
+        { error: ERROR_MESSAGES.BOOKING_ALREADY_CANCELLED },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const booking = await this.prisma.booking.findUniqueOrThrow({
+      where: { id },
+    });
 
     return this.toResponseDto(booking);
   }

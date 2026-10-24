@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -28,5 +29,10 @@ export class BookingsController {
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.bookingsService.findById(id);
+  }
+
+  @Delete(':id')
+  cancel(@Param('id') id: string) {
+    return this.bookingsService.cancel(id);
   }
 }

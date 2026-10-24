@@ -1,6 +1,8 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -34,6 +36,6 @@ model Booking {
   slot           Slot          @relation(fields: [slotId], references: [id])
 
   @@index([email, createdAt])
-  @@index([slotId, status])
+  @@unique([slotId], map: "bookings_one_confirmed_booking_per_slot_idx", where: raw("status = 'confirmed'"))
   @@map("bookings")
 }
