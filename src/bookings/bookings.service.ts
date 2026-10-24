@@ -6,12 +6,25 @@ import { PrismaService } from '../database/prisma.service.js';
 import { BookingStatus } from '../generated/prisma/enums.js';
 import { ERROR_MESSAGES } from '../common/errors/error-messages.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
+import { ListBookingsDto } from './dto/list-bookings.dto.js';
 
 @Injectable()
 export class BookingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(input: CreateBookingDto) {
+  async create(input: CreateBookingDto, idempotencyKey?: string) {
+    const normalizedIdempotencyKey = idempotencyKey?.trim() || undefined;
+
+    if (normalizedIdempotencyKey) {
+      const existingBooking = await this.prisma.booking.findUnique({
+        where: { idempotencyKey: normalizedIdempotencyKey },
+      });
+
+      if (existingBooking) {
+        return this.replayIdempotentBooking(existingBooking, input);
+      }
+    }
+
     const slot = await this.prisma.slot.findUnique({
       where: { id: input.slot_id },
     });
@@ -54,6 +67,7 @@ export class BookingsService {
           slotId: input.slot_id,
           name: input.name,
           email: input.email,
+          idempotencyKey: normalizedIdempotencyKey,
         },
       });
     } catch (error) {
@@ -61,6 +75,16 @@ export class BookingsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
+        if (normalizedIdempotencyKey) {
+          const existingBooking = await this.prisma.booking.findUnique({
+            where: { idempotencyKey: normalizedIdempotencyKey },
+          });
+
+          if (existingBooking) {
+            return this.replayIdempotentBooking(existingBooking, input);
+          }
+        }
+
         throw new HttpException(
           { error: ERROR_MESSAGES.SLOT_ALREADY_BOOKED },
           HttpStatus.CONFLICT,
@@ -68,6 +92,25 @@ export class BookingsService {
       }
 
       throw error;
+    }
+
+    return this.toResponseDto(booking);
+  }
+
+  private replayIdempotentBooking(
+    booking: Booking,
+    input: CreateBookingDto,
+  ) {
+    const matchesRequest =
+      booking.slotId === input.slot_id &&
+      booking.name === input.name &&
+      booking.email === input.email;
+
+    if (!matchesRequest) {
+      throw new HttpException(
+        { error: ERROR_MESSAGES.IDEMPOTENCY_KEY_REUSED },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
 
     return this.toResponseDto(booking);
@@ -86,6 +129,26 @@ export class BookingsService {
     }
 
     return this.toResponseDto(booking);
+  }
+
+  async findAll(query: ListBookingsDto) {
+    const bookings = await this.prisma.booking.findMany({
+      where: { email: query.email },
+      orderBy: { createdAt: 'asc' },
+      skip: (query.page - 1) * query.limit,
+      take: query.limit + 1,
+    });
+
+    const hasMore = bookings.length > query.limit;
+    const page = hasMore ? bookings.slice(0, query.limit) : bookings;
+
+    return {
+      bookings: page.map((booking) => this.toResponseDto(booking)),
+      page: query.page,
+      limit: query.limit,
+      has_next_page: hasMore,
+      has_previous_page: query.page > 1,
+    };
   }
 
   async cancel(id: string) {

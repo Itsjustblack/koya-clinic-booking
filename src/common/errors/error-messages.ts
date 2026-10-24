@@ -1,6 +1,7 @@
 export const ERROR_MESSAGES = {
   BOOKING_NOT_FOUND: 'booking not found',
   INTERNAL_SERVER_ERROR: 'internal server error',
+  IDEMPOTENCY_KEY_REUSED: 'idempotency key reused with a different body',
   INVALID_API_KEY: 'invalid api key',
   INVALID_REQUEST: 'invalid request',
   SLOT_ALREADY_BOOKED: 'slot already booked',
