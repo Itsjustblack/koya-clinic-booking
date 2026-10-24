@@ -9,7 +9,9 @@ import {
   Query,
   UsePipes,
   ValidationPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard.js';
 import { BookingsService } from './bookings.service.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { ListBookingsDto } from './dto/list-bookings.dto.js';
@@ -25,6 +27,7 @@ export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Post()
+  @UseGuards(RateLimitGuard)
   create(
     @Body() body: CreateBookingDto,
     @Headers('Idempotency-Key') idempotencyKey?: string,

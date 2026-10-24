@@ -6,6 +6,7 @@ export const ERROR_MESSAGES = {
   INVALID_REQUEST: 'invalid request',
   SLOT_ALREADY_BOOKED: 'slot already booked',
   REQUEST_FAILED: 'request failed',
+  RATE_LIMIT_EXCEEDED: 'booking rate limit exceeded',
   BOOKING_ALREADY_CANCELLED: 'booking already cancelled',
   SLOT_ALREADY_STARTED: 'slot already started',
   SLOT_NOT_FOUND: 'slot not found',
