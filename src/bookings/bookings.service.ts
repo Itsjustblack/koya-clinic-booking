@@ -21,6 +21,13 @@ export class BookingsService {
       );
     }
 
+    if (slot.start <= new Date()) {
+      throw new HttpException(
+        { error: ERROR_MESSAGES.SLOT_ALREADY_STARTED },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const booking = await this.prisma.booking.create({
       data: {
         id: nanoid(12),
