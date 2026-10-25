@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BookingStatus {
+  CONFIRMED @map("confirmed")
+  CANCELLED @map("cancelled")
+}
+
+model Slot {
+  id       String    @id
+  provider String
+  start    DateTime
+  end      DateTime
+  bookings Booking[]
+
+  @@index([provider, start])
+  @@map("slots")
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  slotId         String        @map("slot_id")
+  name           String
+  email          String
+  status         BookingStatus @default(CONFIRMED)
+  idempotencyKey String?       @unique @map("idempotency_key")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  slot           Slot          @relation(fields: [slotId], references: [id])
+
+  @@index([email, createdAt])
+  @@unique([slotId], map: "bookings_one_confirmed_booking_per_slot_idx", where: raw("status = 'confirmed'"))
+  @@map("bookings")
+}

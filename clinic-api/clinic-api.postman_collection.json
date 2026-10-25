@@ -1,0 +1,805 @@
+{
+  "info": {
+    "name": "Clinic Booking API",
+    "_postman_id": "clinic-booking-api-collection",
+    "description": "Covers every endpoint and edge case in PROJECT.md: auth, validation, 404/409/422/429, idempotency, pagination, and the Level 3 double-booking guard.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "api_key", "value": "kOgcRqTLGpN8LdSc9UO2GtSL" },
+    { "key": "booking_id", "value": "" },
+    { "key": "conflict_booking_id", "value": "" },
+    { "key": "idem_booking_id", "value": "" },
+    { "key": "idem_key", "value": "idem-key-{{$randomInt}}" }
+  ],
+  "item": [
+    {
+      "name": "0. Setup",
+      "item": [
+        {
+          "name": "Reset slots (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has confirmation message', () => pm.expect(pm.response.json()).to.have.property('message'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/reset",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slots\": [\n    { \"id\": \"s1\", \"provider\": \"Dr Ade\", \"start\": \"2026-12-10T09:00:00Z\", \"end\": \"2026-12-10T09:30:00Z\" },\n    { \"id\": \"s2\", \"provider\": \"Dr Ade\", \"start\": \"2026-12-10T10:00:00Z\", \"end\": \"2026-12-10T10:30:00Z\" },\n    { \"id\": \"s3\", \"provider\": \"Dr Bola\", \"start\": \"2026-12-10T11:00:00Z\", \"end\": \"2026-12-10T11:30:00Z\" },\n    { \"id\": \"s-started\", \"provider\": \"Dr Ade\", \"start\": \"2020-01-01T09:00:00Z\", \"end\": \"2020-01-01T09:30:00Z\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset missing slots array (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error shape', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/reset",
+            "body": { "mode": "raw", "raw": "{}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Auth (X-API-Key)",
+      "item": [
+        {
+          "name": "Missing API key (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error shape', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/slots"
+          }
+        },
+        {
+          "name": "Wrong API key (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "not-the-real-key" }],
+            "url": "{{base_url}}/slots"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. GET /slots",
+      "item": [
+        {
+          "name": "List all slots, ordered by start (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('has slots array', () => pm.expect(body.slots).to.be.an('array'));",
+                  "pm.test('ordered by start ascending', () => {",
+                  "  const starts = body.slots.map(s => new Date(s.start).getTime());",
+                  "  const sorted = [...starts].sort((a, b) => a - b);",
+                  "  pm.expect(starts).to.eql(sorted);",
+                  "});",
+                  "pm.test('slot has available flag', () => pm.expect(body.slots[0]).to.have.property('available'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/slots"
+          }
+        },
+        {
+          "name": "Filter by provider, exact match (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('only matching provider returned', () => {",
+                  "  pm.expect(body.slots.every(s => s.provider === 'Dr Ade')).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/slots?provider=Dr Ade",
+              "host": ["{{base_url}}"],
+              "path": ["slots"],
+              "query": [{ "key": "provider", "value": "Dr Ade" }]
+            }
+          }
+        },
+        {
+          "name": "Filter by provider with no matches (200, empty array)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('empty slots array', () => pm.expect(pm.response.json().slots).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/slots?provider=Dr Nobody",
+              "host": ["{{base_url}}"],
+              "path": ["slots"],
+              "query": [{ "key": "provider", "value": "Dr Nobody" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. POST /bookings - happy path",
+      "item": [
+        {
+          "name": "Create booking (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('id is 12-char nanoid', () => pm.expect(body.id).to.match(/^[A-Za-z0-9_-]{12}$/));",
+                  "pm.test('status is confirmed', () => pm.expect(body.status).to.eql('confirmed'));",
+                  "pm.test('name trimmed', () => pm.expect(body.name).to.eql('Ada Obi'));",
+                  "pm.test('email trimmed and lowercased', () => pm.expect(body.email).to.eql('ada@example.com'));",
+                  "pm.collectionVariables.set('booking_id', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slot_id\": \"s1\",\n  \"name\": \"  Ada Obi  \",\n  \"email\": \"  ADA@EXAMPLE.COM  \"\n}"
+            }
+          }
+        },
+        {
+          "name": "Slot already has a confirmed booking (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error shape', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slot_id\": \"s1\",\n  \"name\": \"Someone Else\",\n  \"email\": \"else@example.com\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. POST /bookings - validation (400)",
+      "item": [
+        {
+          "name": "Missing slot_id (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Ada Obi\",\n  \"email\": \"ada@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Empty name (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s2\",\n  \"name\": \"\",\n  \"email\": \"ada@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Missing email (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s2\",\n  \"name\": \"Ada Obi\"\n}" }
+          }
+        },
+        {
+          "name": "Invalid email format (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s2\",\n  \"name\": \"Ada Obi\",\n  \"email\": \"not-an-email\"\n}" }
+          }
+        },
+        {
+          "name": "Slot does not exist (404)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 404', () => pm.response.to.have.status(404));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Ada Obi\",\n  \"email\": \"ada2@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Slot already started (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s-started\",\n  \"name\": \"Ada Obi\",\n  \"email\": \"ada3@example.com\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. POST /bookings - idempotency",
+      "item": [
+        {
+          "name": "Create with Idempotency-Key (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('idem_booking_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idem_key}}" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s3\",\n  \"name\": \"Ida Potent\",\n  \"email\": \"ida@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Repeat same key + same body -> same booking (201, no new record)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('same booking id returned', () => {",
+                  "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('idem_booking_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idem_key}}" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s3\",\n  \"name\": \"Ida Potent\",\n  \"email\": \"ida@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Same key + different body (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error shape', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idem_key}}" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s3\",\n  \"name\": \"A Totally Different Name\",\n  \"email\": \"ida@example.com\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. POST /bookings - rate limit (429)",
+      "item": [
+        {
+          "name": "Attempt 1 (allowed)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('not rate limited', () => pm.response.to.not.have.status(429));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Rate Limit\",\n  \"email\": \"ratelimit@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Attempt 2 (allowed)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('not rate limited', () => pm.response.to.not.have.status(429));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Rate Limit\",\n  \"email\": \"ratelimit@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Attempt 3 (allowed)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('not rate limited', () => pm.response.to.not.have.status(429));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Rate Limit\",\n  \"email\": \"ratelimit@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Attempt 4 (allowed)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('not rate limited', () => pm.response.to.not.have.status(429));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Rate Limit\",\n  \"email\": \"ratelimit@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Attempt 5 (allowed, last before limit)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('not rate limited', () => pm.response.to.not.have.status(429));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Rate Limit\",\n  \"email\": \"ratelimit@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Attempt 6 (429 + Retry-After)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 429', () => pm.response.to.have.status(429));",
+                  "pm.test('has Retry-After header in whole seconds', () => {",
+                  "  const retryAfter = pm.response.headers.get('Retry-After');",
+                  "  pm.expect(retryAfter).to.not.be.null;",
+                  "  pm.expect(Number.isInteger(Number(retryAfter))).to.be.true;",
+                  "});",
+                  "pm.test('error shape', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"does-not-exist\",\n  \"name\": \"Rate Limit\",\n  \"email\": \"ratelimit@example.com\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. GET /bookings - list & pagination",
+      "item": [
+        {
+          "name": "List bookings by email (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('has pagination fields', () => {",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "  pm.expect(body).to.have.property('has_next_page');",
+                  "  pm.expect(body).to.have.property('has_previous_page');",
+                  "});",
+                  "pm.test('defaults are page=1, limit=10', () => {",
+                  "  pm.expect(body.page).to.eql(1);",
+                  "  pm.expect(body.limit).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/bookings?email=ADA@EXAMPLE.COM",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"],
+              "query": [{ "key": "email", "value": "ADA@EXAMPLE.COM" }]
+            },
+            "description": "Email matching must ignore case - this uses uppercase on purpose."
+          }
+        },
+        {
+          "name": "Missing email (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/bookings"
+          }
+        },
+        {
+          "name": "page=0 (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/bookings?email=ada@example.com&page=0",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"],
+              "query": [
+                { "key": "email", "value": "ada@example.com" },
+                { "key": "page", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "limit=51 (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/bookings?email=ada@example.com&limit=51",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"],
+              "query": [
+                { "key": "email", "value": "ada@example.com" },
+                { "key": "limit", "value": "51" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "limit=0 (400)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/bookings?email=ada@example.com&limit=0",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"],
+              "query": [
+                { "key": "email", "value": "ada@example.com" },
+                { "key": "limit", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "page=abc (400, non-numeric)",
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400));"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/bookings?email=ada@example.com&page=abc",
+              "host": ["{{base_url}}"],
+              "path": ["bookings"],
+              "query": [
+                { "key": "email", "value": "ada@example.com" },
+                { "key": "page", "value": "abc" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. GET /bookings/{id}",
+      "item": [
+        {
+          "name": "Lookup existing booking (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('id matches', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('booking_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/bookings/{{booking_id}}"
+          }
+        },
+        {
+          "name": "Lookup unknown booking id (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error shape', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/bookings/does-not-exist"
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. DELETE /bookings/{id}",
+      "item": [
+        {
+          "name": "Create booking to cancel (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('conflict_booking_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s2\",\n  \"name\": \"Cancel Me\",\n  \"email\": \"cancelme@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Cancel booking (200, status cancelled)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('booking status is cancelled', () => pm.expect(pm.response.json().status).to.eql('cancelled'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/bookings/{{conflict_booking_id}}"
+          }
+        },
+        {
+          "name": "Cancel already-cancelled booking (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/bookings/{{conflict_booking_id}}"
+          }
+        },
+        {
+          "name": "Cancel unknown booking id (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+            "url": "{{base_url}}/bookings/does-not-exist"
+          }
+        },
+        {
+          "name": "Slot freed after cancel - rebook s2 (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201 - slot was freed', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{base_url}}/bookings",
+            "body": { "mode": "raw", "raw": "{\n  \"slot_id\": \"s2\",\n  \"name\": \"Rebooker\",\n  \"email\": \"rebooker@example.com\"\n}" }
+          }
+        }
+      ]
+    }
+  ]
+}
