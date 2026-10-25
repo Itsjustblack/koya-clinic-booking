@@ -22,11 +22,6 @@ export function useSlots() {
 		return Array.from(new Set(query.data.map((slot) => slot.provider))).sort();
 	}, [query.data]);
 
-	const availableCount = useMemo(() => {
-		if (!query.data) return 0;
-		return query.data.filter(isSlotBookable).length;
-	}, [query.data]);
-
 	const filteredSlots = useMemo(() => {
 		if (!query.data) return [];
 		return query.data.filter((slot) => {
@@ -36,6 +31,11 @@ export function useSlots() {
 			return true;
 		});
 	}, [query.data, provider, availability]);
+
+	const availableCount = useMemo(
+		() => filteredSlots.filter(isSlotBookable).length,
+		[filteredSlots],
+	);
 
 	const totalPages = Math.max(1, Math.ceil(filteredSlots.length / PAGE_SIZE));
 	const currentPage = Math.min(page, totalPages);
