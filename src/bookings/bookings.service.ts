@@ -140,8 +140,8 @@ export class BookingsService {
         const cursor = decodeCursor(query.cursor);
         cursorFilter = {
           OR: [
-            { createdAt: { gt: cursor.createdAt } },
-            { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+            { slot: { start: { gt: cursor.start } } },
+            { slot: { start: cursor.start }, id: { gt: cursor.id } },
           ],
         };
       } catch {
@@ -154,8 +154,9 @@ export class BookingsService {
 
     const bookings = await this.prisma.booking.findMany({
       where: { email: query.email, ...cursorFilter },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ slot: { start: 'asc' } }, { id: 'asc' }],
       take: query.limit + 1,
+      include: { slot: true },
     });
 
     const hasMore = bookings.length > query.limit;
@@ -166,7 +167,7 @@ export class BookingsService {
       bookings: page.map((booking) => this.toResponseDto(booking)),
       next_cursor:
         hasMore && lastBooking
-          ? encodeCursor({ createdAt: lastBooking.createdAt, id: lastBooking.id })
+          ? encodeCursor({ start: lastBooking.slot.start, id: lastBooking.id })
           : null,
     };
   }
