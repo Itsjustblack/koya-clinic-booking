@@ -66,16 +66,16 @@ npm run test:cov
 
 ## API overview
 
-Every request needs an `X-API-Key` header matching `API_KEY`. Every error response has the shape `{ "error": "<message>" }`.
+Every request needs an `X-API-Key` header matching `API_KEY`. Every error response has the shape `{ "error": "<message>" }`. All routes are served under the `/api` prefix.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/reset` | Wipe all bookings and slots, then load the slots given in the request body. For tests and seeding — not for production data. |
-| `GET` | `/slots` | List every slot, earliest `start` first. Optional `provider` query filter. |
-| `POST` | `/bookings` | Book a slot. Supports an optional `Idempotency-Key` header and is rate-limited per email. |
-| `GET` | `/bookings` | List one person's bookings by `email`, earliest slot `start` first, with cursor pagination (`limit`, `cursor`). |
-| `GET` | `/bookings/:id` | Look up a single booking. |
-| `DELETE` | `/bookings/:id` | Cancel a booking and free its slot. |
+| `POST` | `/api/reset` | Wipe all bookings and slots, then load the slots given in the request body. For tests and seeding — not for production data. |
+| `GET` | `/api/slots` | List every slot, earliest `start` first. Optional `provider` query filter. |
+| `POST` | `/api/bookings` | Book a slot. Supports an optional `Idempotency-Key` header and is rate-limited per email. |
+| `GET` | `/api/bookings` | List one person's bookings by `email`, earliest slot `start` first, with cursor pagination (`limit`, `cursor`). |
+| `GET` | `/api/bookings/:id` | Look up a single booking. |
+| `DELETE` | `/api/bookings/:id` | Cancel a booking and free its slot. |
 
 See [PROJECT.md](PROJECT.md) for full request/response shapes, validation rules, and status codes.
 
