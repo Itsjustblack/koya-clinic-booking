@@ -1,75 +1,70 @@
-# React + TypeScript + Vite
+# Koya Clinic — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The web frontend for the Koya Clinic booking app. Patients use it to browse open appointment slots, book one, and look up or cancel their bookings by email.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Browse slots** — filter by provider and by availability (available / unavailable), with client-side pagination.
+- **Slot status** — each slot shows as Available, Booked, or Expired (an available slot whose start time has already passed), and the booking button is disabled unless the slot is actually bookable.
+- **Book a slot** — a dialog collects name and email, validates them, and submits the booking. Duplicate submissions are protected with an idempotency key.
+- **Booking confirmation** — a confirmation dialog shows the booking details after a successful booking.
+- **My Bookings** — look up bookings by email (paginated) and cancel a confirmed booking, which frees the slot again.
+- **Feedback** — success and error states surface as toasts (via [sonner](https://sonner.emilkowal.ski/)) as well as inline alerts, including rate-limit messages with a countdown.
 
-## React Compiler
+## Tech stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript
+- [TanStack Query](https://tanstack.com/query) for data fetching, caching, and mutations
+- [Tailwind CSS v4](https://tailwindcss.com/) with [shadcn](https://ui.shadcn.com/)-style components built on [Base UI](https://base-ui.com/)
+- [Axios](https://axios-http.com/) for HTTP requests to the API
 
-## Expanding the ESLint configuration
+## Getting started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+The [clinic-api](../clinic-api) backend running and reachable — this app is a pure client for that API.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Setup
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+cp .env.example .env.local
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Fill in `.env.local`:
 
 ```
+VITE_API_URL=http://localhost:8000
+VITE_API_KEY=<your clinic-api API key>
+```
+
+### Run
+
+```bash
+npm run dev
+```
+
+Opens at `http://localhost:5173`.
+
+### Other scripts
+
+```bash
+npm run build    # type-check and build for production
+npm run lint     # run eslint
+npm run preview  # preview the production build locally
+```
+
+## Project structure
+
+```
+src/
+  components/ui/      shared UI primitives (button, dialog, select, toaster, ...)
+  features/
+    slots/             slot browsing: api calls, hooks, components, status logic
+    bookings/           booking creation, lookup, and cancellation
+  lib/                 api client, error formatting, date/time formatting
+  providers/           app-wide providers (TanStack Query)
+  types/               shared API types
+```
+
+Each feature folder follows the same shape: `api.ts` for HTTP calls, `hooks/` for the TanStack Query hooks built on top of them, and `components/` for the UI.
